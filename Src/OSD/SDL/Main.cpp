@@ -858,6 +858,13 @@ VRVirtualInput g_vrInput;
 
 static int  s_vrGunHand = 0;                 // hand whose aim drives the gun (last to fire, or fixed)
 static bool s_vrPrevRecenter = false;
+// Both sticks held in for a second: options menu (for controllers whose menu button belongs to
+// the runtime, e.g. Valve Index under SteamVR). A single stick click still re-centres, on release.
+static uint64_t s_vrBothSticksSince = 0;   // perf counter when both sticks went down, 0 = not
+static bool s_vrStickCombo = false;        // both sticks were down during this press: no re-centre
+static bool s_vrStickMenuFired = false;    // the hold already toggled the menu
+static bool s_vrStickMenuRequest = false;  // toggle the menu this frame
+static bool s_vrPrevKeyM = false;          // M on the keyboard: options menu
 static DesktopXR *s_vrXrForHook = nullptr;   // woken by the emulator thread (see g_vrFrameDoneHook)
 // Game frame timing (async VR loop): when the last frame was started, when the emulator
 // thread finished it, and how long a frame usually takes - so a headset frame can wait a
@@ -902,7 +909,7 @@ static void VRReadSettings()
   v.recoil      = std::clamp(s_runtime_config["VRRecoil"].ValueAsDefault<int>(v.recoil), 0, 2);
   v.aimNudgeX   = std::clamp(s_runtime_config["VRAimNudgeX"].ValueAsDefault<float>(v.aimNudgeX), -3.0f, 3.0f);
   v.aimNudgeY   = std::clamp(s_runtime_config["VRAimNudgeY"].ValueAsDefault<float>(v.aimNudgeY), -3.0f, 3.0f);
-  v.renderScale = std::clamp(s_runtime_config["VRResolutionScale"].ValueAsDefault<float>(v.renderScale), 0.5f, 1.5f);
+  v.renderScale = std::clamp(s_runtime_config["VRResolutionScale"].ValueAsDefault<float>(v.renderScale), 0.5f, 2.0f);
   v.hudFilter   = std::clamp(s_runtime_config["VRHudFilter"].ValueAsDefault<int>(v.hudFilter), 0, 2);
 }
 
@@ -1140,12 +1147,33 @@ static void ApplyVRInput(DesktopXR &xr)
   g_vrInput.test    = in.grip[1] && in.thumbClick[1] && !s_vrMenuOpen;   // left grip + left stick click
   g_vrInput.service = false;
 
-  // Either stick click: re-centre the view (game screen straight ahead). Not with the left
-  // grip held - that is the operator menu.
-  const bool recenter = in.thumbClick[0] || (in.thumbClick[1] && !in.grip[1]);
-  if (recenter && !s_vrPrevRecenter)
-    xr.Recenter();
-  s_vrPrevRecenter = recenter;
+  // Either stick click: re-centre the view (game screen straight ahead), on release. Not with
+  // the left grip held - that is the operator menu. Both sticks held in for a second: the
+  // options menu (then no re-centre).
+  const bool stickDown = in.thumbClick[0] || (in.thumbClick[1] && !in.grip[1]);
+  const bool bothDown = in.thumbClick[0] && in.thumbClick[1] && !in.grip[1];
+  if (bothDown)
+  {
+    s_vrStickCombo = true;
+    const uint64_t now = SDL_GetPerformanceCounter();
+    if (!s_vrBothSticksSince)
+      s_vrBothSticksSince = now;
+    if (!s_vrStickMenuFired && (double)(now - s_vrBothSticksSince) >= 1.0 * (double)SDL_GetPerformanceFrequency())
+    {
+      s_vrStickMenuRequest = true;
+      s_vrStickMenuFired = true;
+    }
+  }
+  else
+    s_vrBothSticksSince = 0;
+  if (!stickDown && s_vrPrevRecenter)
+  {
+    if (!s_vrStickCombo)
+      xr.Recenter();
+    s_vrStickCombo = false;
+    s_vrStickMenuFired = false;
+  }
+  s_vrPrevRecenter = stickDown;
 }
 
 /******************************************************************************
@@ -1429,6 +1457,7 @@ int Supermodel(const Game &game, ROMSet *rom_set, IEmulator *Model3, CInputs *In
         VRFinishFrame(vrModel3, vrInFlight);
   g_vrFrameDoneHook = nullptr;
   s_vrXrForHook = nullptr;
+  g_tileGenWide.on = false;
   s_vrMenu.Shutdown();
   xr.reset();
       }
@@ -1436,6 +1465,9 @@ int Supermodel(const Game &game, ROMSet *rom_set, IEmulator *Model3, CInputs *In
     if (xr)
     {
       SDL_GL_SetSwapInterval(0);   // the headset paces the loop, never the monitor
+      xr->EyeSizes(s_vrSettings.eyeRecW, s_vrSettings.eyeRecH, s_vrSettings.eyeMaxW, s_vrSettings.eyeMaxH);
+      s_vrSettings.eyeCapW = s_runtime_config["VRMaxEyeWidth"].ValueAsDefault<int>(0);
+      g_tileGenWide.on = s_runtime_config["VRBackdropFill"].ValueAsDefault<bool>(true);   // sky past the screen edges
       s_vrAimScaleX  = s_runtime_config["VRAimScaleX"].ValueAsDefault<float>(1.0f);
       s_vrAimOffsetX = s_runtime_config["VRAimOffsetX"].ValueAsDefault<float>(0.0f);
       s_vrAimScaleY  = s_runtime_config["VRAimScaleY"].ValueAsDefault<float>(1.0f);
@@ -1698,12 +1730,25 @@ int Supermodel(const Game &game, ROMSet *rom_set, IEmulator *Model3, CInputs *In
       xr->SetGunMode(s_vrSettings.gunModel == 4 ? 1 : s_vrSettings.gunModel);
       xr->SetGunColour(s_vrSettings.gunColour);
 
-      // Options menu: left controller's menu button opens/closes it; the game pauses meanwhile.
+      // Options menu: left controller's menu button, both sticks held in for a second, or M on
+      // the keyboard opens/closes it; the game pauses meanwhile.
       {
         const DesktopXRInput &vin = xr->Input();
         const bool menuButton = vin.menu;
         bool toggle = menuButton && !s_vrPrevMenuButton;
         s_vrPrevMenuButton = menuButton;
+        if (s_vrStickMenuRequest)
+        {
+          toggle = true;
+          s_vrStickMenuRequest = false;
+        }
+        {
+          const Uint8 *keys = SDL_GetKeyboardState(nullptr);
+          const bool keyM = keys && keys[SDL_SCANCODE_M];
+          if (keyM && !s_vrPrevKeyM)
+            toggle = true;
+          s_vrPrevKeyM = keyM;
+        }
         VRMenuResult mr;
         if (s_vrMenuOpen)
         {
@@ -1785,6 +1830,40 @@ int Supermodel(const Game &game, ROMSet *rom_set, IEmulator *Model3, CInputs *In
         SetAudioEnabled(true);
       }
       xr->SetBackdropTexture(Render2D->GetLayerTexture(0));
+      // the same background layers drawn past the screen edges (TileGenWide), for the sky around you
+      {
+        static GLuint wideTex = 0;
+        static unsigned wideVersion = 0;
+        static float wideRect[4] = { 0, 0, 0, 0 };
+        {
+          std::lock_guard<std::mutex> lock(g_tileGenWide.m);
+          if (g_tileGenWide.on && g_tileGenWide.version != wideVersion && !g_tileGenWide.data.empty())
+          {
+            if (!wideTex)
+            {
+              glGenTextures(1, &wideTex);
+              glBindTexture(GL_TEXTURE_2D, wideTex);
+              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            }
+            glBindTexture(GL_TEXTURE_2D, wideTex);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, g_tileGenWide.width, g_tileGenWide.height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                         g_tileGenWide.data.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+            wideVersion = g_tileGenWide.version;
+            const TileGenWide &tw = g_tileGenWide;
+            wideRect[0] = (float)tw.x0; wideRect[1] = (float)tw.y0;
+            wideRect[2] = (float)(tw.x0 + tw.width * tw.step); wideRect[3] = (float)(tw.y0 + tw.height * tw.step);
+          }
+        }
+        if (g_tileGenWide.on && wideVersion)
+          xr->SetBackdropWide(wideTex, wideRect[0], wideRect[1], wideRect[2], wideRect[3]);
+        else
+          xr->SetBackdropWide(0, 0, 0, 0, 0);
+      }
       if (vrPaced && !vrAsync)
       {
         // Keep the game at its real speed whatever the headset does, but never run two game

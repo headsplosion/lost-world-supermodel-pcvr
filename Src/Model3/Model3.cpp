@@ -2207,6 +2207,9 @@ void CModel3::RunMainBoardFrame(void)
         TileGen.DrawLine(i);
         ppc_execute(lineCycles);
     }
+    // PC VR: the background layers past the screen edges, for the sky around the player
+    if (g_tileGenWide.on)
+        TileGen.DrawWideBottom();
 
 	timings.ppcTicks = CThread::GetTicks() - start;
 }

@@ -55,6 +55,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <array>
 #include "Supermodel.h"
 
 // Offsets of memory regions within TileGen memory pool
@@ -578,6 +579,102 @@ void CTileGen::RecomputePalettes(int layer)
 }
 
 TileGenHide g_tileGenHide;
+TileGenWide g_tileGenWide;
+
+// PC VR: the layers below the 3D scene, past the screen edges (see TileGenWide). Same rules as
+// DrawLine: pair 2/3 under pair 0/1, the line mask picks primary or alt layer.
+// Left and right: the tile map really continues there (it wraps every 512 pixels and the game
+// scrolls it as the camera turns), so the sky moves exactly like the game's own - no mirrored
+// copies sliding the other way. Above and below, the map holds unrelated parts of the picture
+// (The Lost World: the tree line below the clouds), so the screen's top / bottom row is stretched
+// instead, fading to that row's average colour.
+void CTileGen::DrawWideBottom()
+{
+	const int step = 4;
+	const int x0 = -744, y0 = -576;				// 1.5 screens left / above the game's window
+	const int W = 496 * 4 / step, H = 384 * 4 / step;	// 4 screens wide and tall
+	static std::vector<UINT32> buf;
+	buf.assign((size_t)W * H, 0);
+	for (int i = 2; i-- > 0;) {
+		const int prim = i * 2, alt = i * 2 + 1;
+		const bool has[2] = { IsEnabled(prim) && !Above3D(prim), IsEnabled(alt) && !Above3D(alt) };
+		if (!has[0] && !has[1]) {
+			continue;
+		}
+		for (int vy = 0; vy < H; vy++) {
+			const int gy = y0 + vy * step;
+			const int line = std::clamp(gy, 0, 383);	// rows above / below the screen: its edge row
+			const int lineMask = GetLineMask(prim, line);
+			const int sx[2] = { LineScrollMode(prim) ? GetLineScroll(prim, line) : GetXScroll(prim),
+								LineScrollMode(alt) ? GetLineScroll(alt, line) : GetXScroll(alt) };
+			const int sy[2] = { GetYScroll(prim), GetYScroll(alt) };
+			UINT32* row = &buf[(size_t)vy * W];
+			for (int vx = 0; vx < W; vx++) {
+				const int gx = x0 + vx * step;
+				const int layer = (GetPixelMask(lineMask, std::clamp(gx, 0, 495)) + 1) & 1;
+				if (!has[layer]) {
+					continue;
+				}
+				const int index = prim + layer;
+				const int xx = (gx + sx[layer]) & 511, yy = (line + sy[layer]) & 511;
+				const int tileData = GetTileData(index, (yy / 8) * 32 + xx / 16);
+				int x = vx;
+				if (Is4Bit(index)) {
+					Draw4BitTilePair(tileData, xx & 15, (xx & 15) + 1, yy & 7, row, m_pal[index / 2], x);
+				}
+				else {
+					Draw8BitTilePair(tileData, xx & 15, (xx & 15) + 1, yy & 7, row, m_pal[index / 2], x);
+				}
+			}
+		}
+	}
+	// fade the stretched rows to the average colour of the screen's top / bottom row
+	{
+		const int rowTop = (0 - y0 + step - 1) / step, rowBottom = (383 - y0) / step;
+		auto average = [&](int r) {
+			unsigned s[3] = { 0, 0, 0 };
+			for (int x = 0; x < W; x++) {
+				const UINT32 c = buf[(size_t)r * W + x];
+				s[0] += c & 0xFF; s[1] += (c >> 8) & 0xFF; s[2] += (c >> 16) & 0xFF;
+			}
+			return std::array<unsigned, 3>{ s[0] / W, s[1] / W, s[2] / W };
+		};
+		const auto avgTop = average(rowTop), avgBottom = average(rowBottom);
+		const float fadeRows = 288.0f / step;		// three quarters of a screen height
+		for (int vy = 0; vy < H; vy++) {
+			float t;
+			const std::array<unsigned, 3>* avg;
+			if (vy < rowTop) { t = std::min(1.0f, (rowTop - vy) / fadeRows); avg = &avgTop; }
+			else if (vy > rowBottom) { t = std::min(1.0f, (vy - rowBottom) / fadeRows); avg = &avgBottom; }
+			else continue;
+			// blur the stretched row more the further it is from the screen (no hard streaks),
+			// then mix in the average colour
+			const int radius = (int)(t * 24.0f);
+			std::vector<unsigned> sum((size_t)(W + 1) * 3, 0);
+			for (int x = 0; x < W; x++) {
+				const UINT32 c = buf[(size_t)vy * W + x];
+				for (int k = 0; k < 3; k++) sum[(size_t)(x + 1) * 3 + k] = sum[(size_t)x * 3 + k] + ((c >> (8 * k)) & 0xFF);
+			}
+			for (int x = 0; x < W; x++) {
+				const int a0 = std::max(0, x - radius), a1 = std::min(W, x + radius + 1);
+				unsigned ch[3];
+				for (int k = 0; k < 3; k++) {
+					const float blurred = (float)(sum[(size_t)a1 * 3 + k] - sum[(size_t)a0 * 3 + k]) / (float)(a1 - a0);
+					ch[k] = (unsigned)(blurred + ((float)(*avg)[k] - blurred) * t + 0.5f);
+				}
+				buf[(size_t)vy * W + x] = 0xFF000000u | (ch[2] << 16) | (ch[1] << 8) | ch[0];
+			}
+		}
+	}
+	std::lock_guard<std::mutex> lock(g_tileGenWide.m);
+	g_tileGenWide.data.swap(buf);
+	g_tileGenWide.width = W;
+	g_tileGenWide.height = H;
+	g_tileGenWide.step = step;
+	g_tileGenWide.x0 = x0;
+	g_tileGenWide.y0 = y0;
+	g_tileGenWide.version++;
+}
 
 // Which halves (bit 0 = left tile, bit 1 = right tile) of a tile pair g_tileGenHide leaves out
 static int HiddenHalves(int layer, int tilePairNumber, UINT32 tileData)

@@ -31,6 +31,8 @@
 #include "IRQ.h"
 #include "Graphics/Render2D.h"
 #include "TileGenBuffer.h"
+#include <mutex>
+#include <vector>
 
 // PC VR: a block of name-table entries left undrawn, e.g. a prompt the player doesn't need
 // (L.A. Machineguns: player 2's "PRESS START BUTTON" during single-player play). Entries are
@@ -43,6 +45,20 @@ struct TileGenHide
   unsigned code0 = 0, code1 = 0;                             // 16-bit entry range (inclusive)
 };
 extern TileGenHide g_tileGenHide;
+
+// PC VR: the layers below the 3D scene (the sky in The Lost World) drawn past the screen edges.
+// Their tile maps are 512 x 512 pixels and wrap, so the real background continues beyond the
+// 496 x 384 window the game shows. Drawn at 1/step resolution over a window x0..x0+width*step,
+// y0..y0+height*step (game screen pixels), only while 'on'. Read by the VR layer (backdrop).
+struct TileGenWide
+{
+  volatile bool on = false;
+  std::mutex m;                 // guards everything below
+  std::vector<UINT32> data;     // RGBA, rows top to bottom
+  int width = 0, height = 0, step = 4, x0 = 0, y0 = 0;
+  unsigned version = 0;
+};
+extern TileGenWide g_tileGenWide;
 
   /*
    * CTileGen:
@@ -262,6 +278,7 @@ public:
 	 *		line	The line number to draw (from 0-383)
 	 */
 	void DrawLine(int line);	// from 0-383
+	void DrawWideBottom();		// PC VR: g_tileGenWide
 
 	/*
 	 * CTileGen(config):

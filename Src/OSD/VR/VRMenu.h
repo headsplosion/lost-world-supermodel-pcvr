@@ -29,7 +29,10 @@ struct VRSettings
   int   recoil      = 1;      // controller vibration while firing: 0 off, 1 light, 2 strong
   float aimNudgeX   = 0.0f;   // aim fine-tune, degrees (+ = right)
   float aimNudgeY   = 0.0f;   // aim fine-tune, degrees (+ = up)
-  float renderScale = 1.0f;   // eye resolution, applied on the next start
+  float renderScale = 1.0f;   // eye resolution, applied on the next start (0.5 - 2.0)
+  int   eyeRecW = 0, eyeRecH = 0;   // the runtime's recommended eye size (set by the program, not saved)
+  int   eyeMaxW = 0, eyeMaxH = 0;   // the runtime's largest eye size (set by the program, not saved)
+  int   eyeCapW = 0;                // VRMaxEyeWidth from the ini, 0 = none (set by the program, not saved)
   int   hudFilter   = 1;      // 2D layer scaling: 0 soft, 1 sharp, 2 smooth edges
 };
 

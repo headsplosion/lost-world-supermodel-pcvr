@@ -64,7 +64,7 @@ public:
     float hudDistance        = 20.0f; // metres from the origin to the 2D/HUD plane (far, so it
                                       // matches the depth of the 3D world: no double vision)
     float resolutionScale    = 1.0f;  // multiplier on the runtime's recommended eye size
-    int   maxEyeWidth        = 1664;  // cap (Virtual Desktop can recommend 2500+ px per eye)
+    int   maxEyeWidth        = 0;     // optional cap on pixels per eye (0 = none: the resolution scale decides)
     float refreshHz          = 1000.0f; // headset refresh: the highest rate offered up to this, 0 = runtime default
     bool  threadedWait       = true;   // xrWaitFrame on its own thread (emulator never waits)
     bool  hudInEye           = true;   // draw the 2D layers into the eye images (exact registration
@@ -74,7 +74,7 @@ public:
                                        // game shows 3D (play, cutscenes), fixed for 2D menus
     bool  hideP2Prompt       = true;   // leave out player 2's "PRESS START BUTTON" during play
     bool  staticFill         = true;   // extend the game's hit "static" and full-screen tints over the whole view
-    bool  backdropFill       = true;   // continue the game's background (sky) past its 4:3 screen, mirrored
+    bool  backdropFill       = true;   // continue the game's background (sky) past its 4:3 screen
     int   vignette           = 2;      // comfort vignette during fast camera turns, 0 off .. 3 strong
     int   hudFilter          = 1;      // 2D layer scaling: 0 soft, 1 sharp, 2 smooth edges
     float aimNudgeX          = 0.f;    // aim fine-tune, degrees
@@ -122,6 +122,10 @@ public:
 
   void SetGameFrustum(float left, float right, float top, float bottom);
   void SetBackdropTexture(GLuint tex) { m_backdropTex = tex; }
+  // The game's background drawn past its screen edges (0 = none): the texture and the game-screen
+  // pixel rectangle it covers (x0, y0, x1, y1; the screen itself is 0..496 x 0..384).
+  void SetBackdropWide(GLuint tex, float x0, float y0, float x1, float y1)
+  { m_wideTex = tex; m_wideRect[0] = x0; m_wideRect[1] = y0; m_wideRect[2] = x1; m_wideRect[3] = y1; }
   void SuppressEyes(bool suppress) { m_suppressEyes = suppress; }
   void DrawEyesIfMissing();
 
@@ -167,6 +171,8 @@ public:
   // drawn in the colour set below.
   bool LoadGameGun(const std::string& objPath) { return LoadCustomGun(objPath, 2); }
   void SetGunColour(int colour) { m_gunColour = colour; }   // arcade gun: 0 blue, 1 red
+  // The runtime's recommended and largest eye image sizes (after Init).
+  void EyeSizes(int& recW, int& recH, int& maxW, int& maxH) const { recW = m_eyeRecW; recH = m_eyeRecH; maxW = m_eyeMaxW; maxH = m_eyeMaxH; }
   bool CustomGunLoaded() const { return !m_customGun.empty() || m_gunCount[1] > 0; }
 
   int EyeWidth()  const { return m_eyes[0].width; }
@@ -270,6 +276,8 @@ private:
   DesktopXRInput m_input;
 
   GLuint m_backdropTex = 0;
+  GLuint m_wideTex = 0;
+  float  m_wideRect[4] = { 0, 0, 496, 384 };
   GLuint m_hudTopTex = 0;
   bool   m_hudPointers = false;
   bool   m_hideLetterbox = true;
@@ -302,6 +310,7 @@ private:
   static constexpr float kCinemaTanHalfHeight = 0.30f;   // cinema screen: half height (tangent, before CinemaScale)
   GLuint m_cinemaTex[2] = {0, 0}, m_cinemaFbo[2] = {0, 0};   // one per eye in 3D cinema
   int    m_gunMode = 0;
+  int    m_eyeRecW = 0, m_eyeRecH = 0, m_eyeMaxW = 0, m_eyeMaxH = 0;
   std::vector<float> m_customGun;              // pending upload: pos, normal, colour per vertex
   std::vector<float> m_gameGunFile;            // the same for the game's gun from a file (slot 2)
   bool   m_gameGunFileLoaded = false;

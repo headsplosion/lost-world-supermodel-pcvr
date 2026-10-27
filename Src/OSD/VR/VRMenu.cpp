@@ -427,7 +427,21 @@ VRMenuResult VRMenu::Render(VRSettings &s, float pointerU, float pointerV, bool 
       r.changed |= Choice("2D graphics scaling", &s.hudFilter, kFilter, 3);
       r.changed |= Toggle("Hide player 2 PRESS START during play", &s.hideP2);
       r.changed |= Toggle("Hit static fills the whole view", &s.staticFill);
-      r.changed |= Stepper("Render resolution (next start)", &s.renderScale, 0.1f, 0.5f, 1.5f, "%.1fx");
+      {
+        // 1.0 = the headset's (or streamer's) recommended eye size; the pixels per eye are shown
+        char fmt[64] = "%.1fx";
+        if (s.eyeRecW > 0 && s.eyeRecH > 0)
+        {
+          float sc = s.renderScale;
+          if (s.eyeCapW > 0 && s.eyeRecW * sc > (float)s.eyeCapW)
+            sc = (float)s.eyeCapW / (float)s.eyeRecW;
+          int w = (int)(s.eyeRecW * sc + 0.5f), h = (int)(s.eyeRecH * sc + 0.5f);
+          if (s.eyeMaxW > 0) w = std::min(w, s.eyeMaxW);
+          if (s.eyeMaxH > 0) h = std::min(h, s.eyeMaxH);
+          std::snprintf(fmt, sizeof(fmt), "%%.1fx  -  %d x %d", w, h);
+        }
+        r.changed |= Stepper("Render resolution, pixels per eye (next start)", &s.renderScale, 0.1f, 0.5f, 2.0f, fmt);
+      }
       ImGui::EndTabItem();
     }
     ImGui::EndTabBar();

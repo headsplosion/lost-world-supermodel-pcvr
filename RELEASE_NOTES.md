@@ -2,6 +2,12 @@ Windows build of Supermodel with the OpenXR VR mode, set up for **The Lost World
 
 **Download** `LostWorldVR-windows.zip` (Windows) or `LostWorldVR-linux-x86_64.tar.gz` (Linux, experimental) below and unpack it. Put your own `lostwsga.zip` ROM set in the `ROMs` folder. Connect the headset, with Virtual Desktop, Quest Link or SteamVR as the active OpenXR runtime, and run `Play The Lost World VR.bat` (Linux: `./play-lostworld-vr.sh`, with SteamVR, Monado, WiVRn or ALVR). Full instructions are in `README-VR.txt` inside the zip and in the README. No ROMs or other game files are included.
 
+## v0.3.0
+
+- **Sky without the kaleidoscope.** Around the original screen, the sky now comes from the game's own background layers: left and right it continues and turns exactly with the game's sky instead of showing mirrored copies that slid the other way; above and below it fades softly into the sky's colour. Thanks to the player who reported it.
+- **Options menu for Valve Index and similar controllers.** Hold both sticks in for a second, or press M on the PC keyboard, to open or close the options menu. On Index, both menu buttons open SteamVR's own menu. A single stick click still re-centres the view, now when you let go.
+- **Render resolution up to 2.0×, with the pixels per eye shown in the menu.** The old hidden 1664-pixel cap (`VRMaxEyeWidth`) is gone, so 1.0 now really means the size your headset or Virtual Desktop asks for. That's noticeably sharper and also heavier than before: on a weaker PC or a handheld, lower Render resolution in the menu if the game stutters.
+
 ## v0.2.0
 
 - **The game's own guns in your hand.** Gun model › **Rifle** is the heroes' gun from the cutscenes and **Pistol** the handgun from the how-to-play screen, both read from your own ROM with their textures. Rifle is the default.

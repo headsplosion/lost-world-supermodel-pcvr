@@ -320,6 +320,10 @@ bool DesktopXR::Init(const Config& config)
                                                viewCount, &viewCount, views.data()), "xrEnumerateViewConfigurationViews"))
     return false;
 
+  m_eyeRecW = (int)views[0].recommendedImageRectWidth;
+  m_eyeRecH = (int)views[0].recommendedImageRectHeight;
+  m_eyeMaxW = (int)views[0].maxImageRectWidth;
+  m_eyeMaxH = (int)views[0].maxImageRectHeight;
   float scale = std::clamp(m_config.resolutionScale, 0.25f, 2.0f);
   if (m_config.maxEyeWidth > 0 && views[0].recommendedImageRectWidth * scale > (float)m_config.maxEyeWidth)
     scale = (float)m_config.maxEyeWidth / (float)views[0].recommendedImageRectWidth;
@@ -2549,9 +2553,30 @@ void DesktopXR::DrawBackdrop(const New3D::VREye& eye)
   GLint wrapS = GL_CLAMP_TO_EDGE, wrapT = GL_CLAMP_TO_EDGE;
   // only while a 3D scene is on screen: 2D-only screens (menus, scores) stay a framed picture
   const bool fill = m_config.backdropFill && m_scene3D;
+  if (fill && m_wideTex) {
+    // The game's background (sky, distant scenery) only covers its 4:3 screen. Around it: the
+    // same background layers drawn wider by the tile generator (the real continuation of the
+    // sky left and right, faded above and below), then the screen's own sharp picture on top.
+    const float w = m_gameR - m_gameL, h = m_gameT - m_gameB;
+    glBindTexture(GL_TEXTURE_2D, m_wideTex);
+    glUniform4f(m_uRect, m_gameL + m_wideRect[0] / 496.f * w, m_gameL + m_wideRect[2] / 496.f * w,
+                m_gameT - m_wideRect[1] / 384.f * h, m_gameT - m_wideRect[3] / 384.f * h);
+    glBindVertexArray(m_vao);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBindTexture(GL_TEXTURE_2D, m_backdropTex);
+    glUniform4f(m_uRect, m_gameL, m_gameR, m_gameT, m_gameB);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glDisable(GL_BLEND);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+    return;
+  }
   if (fill) {
-    // The game's background (sky, distant scenery) only covers its 4:3 screen. Continue it
-    // past the edges, mirrored, so the sky doesn't end in black around the screen.
+    // No wide background (yet): continue the screen's picture past the edges, mirrored, so the
+    // sky doesn't end in black around the screen.
     const float k = 2.5f, w = m_gameR - m_gameL, h = m_gameT - m_gameB;
     glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, &wrapS);
     glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, &wrapT);

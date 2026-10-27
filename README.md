@@ -6,7 +6,7 @@ Play Sega's 1997 light-gun arcade game **The Lost World: Jurassic Park** in VR. 
 
 ## Features
 
-- **Stereo 3D with head tracking.** The game's 3D world is drawn around you, beyond the edges of the original 4:3 screen, and the sky carries on past them.
+- **Stereo 3D with head tracking.** The game's 3D world is drawn around you, beyond the edges of the original 4:3 screen, and the sky carries on past them: left and right it's the game's own background, which turns with the game's sky; above and below it fades softly.
 - **The controller is the gun.** You can aim and shoot anywhere in the headset's view, up to a screen-width past each edge of the original screen. The game has no crosshair during play, so a red ring shows where your gun hand points. The game's own cutscene sight is hidden, so there is only ever one.
 - **A gun in your hand.** The heroes' rifle or the pistol from the game itself, read from your own ROM with their textures, or your own 3D model of the arcade gun in blue or red (see below). The gun is always drawn in front of the score and text.
 - **Recoil.** The controller vibrates while you fire.
@@ -52,8 +52,9 @@ It runs under X11 or XWayland. SDL2, SDL2_net, GLU and the Khronos OpenXR loader
 | A or Y | Start |
 | B or X | Coin |
 | Left menu button | Open / close the options menu (the game pauses) |
+| Both sticks held in for a second, or M on the PC keyboard | Open / close the options menu too (for Valve Index and other controllers whose menu button opens SteamVR's own menu) |
 | Grip (side button) on the menu | Hold to pick the menu up and move it; let go to drop it |
-| Either stick click | Re-centre the view |
+| Either stick click | Re-centre the view (when you let go) |
 | Left grip + left stick click | Operator (test) menu |
 | Esc (PC keyboard) | Quit |
 
@@ -78,7 +79,7 @@ In the options menu, point at an option and pull the trigger.
 | | 2D graphics scaling | Soft / Sharp / Smooth edges |
 | | Hide player 2's PRESS START | On / Off: player 2's INSERT COIN / Push 2P Start, in play and in cutscenes |
 | | Hit static over the whole view | On / Off (also full-screen fades) |
-| | Render resolution | 0.5× to 1.5× (applies on the next start) |
+| | Render resolution | 0.5× to 2.0× of what the headset (or Virtual Desktop) asks for, shown as pixels per eye (applies on the next start) |
 
 The buttons at the bottom resume the game, re-centre the view or quit. Settings are saved to `Config/Supermodel.ini`. The menu's typeface is [Russo One](https://fonts.google.com/specimen/Russo+One) by Jovanny Lemonad (SIL Open Font License; the included Latin subset is renamed "LW Menu"). You can frame the menu with your own artwork, see `Assets/VR-MENU.txt`.
 

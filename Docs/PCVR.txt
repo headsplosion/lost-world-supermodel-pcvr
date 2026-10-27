@@ -34,6 +34,8 @@ Playing
        A or Y .................. Start
        B or X .................. Coin
        Left menu button ........ options menu (the game pauses; point and pull the trigger)
+       Both sticks held in 1 s . options menu too (for controllers whose menu button opens
+                                 SteamVR's own menu, e.g. Valve Index); M on the keyboard too
        Either stick click ...... re-centre the view (game screen straight ahead)
        Left grip + left stick click ... Test (operator menu) - not needed to play
      The Lost World has no crosshair of its own during play, so a red ring shows where
@@ -83,15 +85,19 @@ Options menu (left controller's menu button)
            2D graphics scaling - Soft / Sharp / Smooth edges (pixel-art upscaling).
            Hide player 2 PRESS START (also in cutscenes in The Lost World), static and fades over the
                       whole view.
-           Render resolution - 0.5x to 1.5x of the headset's own; applies on the next start.
+           Render resolution - 0.5x to 2.0x of the headset's own, with the pixels per eye;
+                      applies on the next start.
   Changes are saved to Config/Supermodel.ini straight away.
   Look: the menu uses Assets/VRMenuFont.ttf (Russo One, SIL Open Font License). It can also be
   framed by your own artwork - see Assets/VR-MENU.txt.
 
 Settings (Config/Supermodel.ini, [ Global ])
-  VRResolutionScale     1.0 = headset's recommended eye size; raise for sharper image
-  VRMaxEyeWidth         cap on pixels per eye (1664). Higher = sharper but more work per
-                        frame; raise it (e.g. 2048) only if the headset stays at full rate
+  VRResolutionScale     0.5 - 2.0; 1.0 = the eye size the headset (or Virtual Desktop) asks
+                        for. Higher = smoother edges but more work per frame; the menu shows
+                        the pixels per eye. Above 1.0 with Virtual Desktop it only smooths
+                        edges (the stream itself is sent at VD's resolution).
+  VRMaxEyeWidth         optional cap on pixels per eye (0 = none). Supermodel.log shows the
+                        eye size actually used ("VR: ... eyes WxH (scale S of RxR)").
   VRHudDistance         metres to the text panel (20 - far, so text and crosshair sit at
                         the same depth as the 3D world and never look doubled)
   VRWorldUnitsPerMeter  stereo scale of the 3D world (1.0)
@@ -116,8 +122,10 @@ Settings (Config/Supermodel.ini, [ Global ])
   VRStaticFill          1 = the game's hit "static" and full-screen fades (e.g. the white veil
                         of the CONTINUE screen) fill your whole view instead of only the
                         original 4:3 screen
-  VRBackdropFill        1 = the game's background picture (the sky) continues past the 4:3
-                        screen, mirrored at its edges, whenever the 3D world is on screen;
+  VRBackdropFill        1 = the game's background (the sky) continues past the 4:3 screen
+                        whenever the 3D world is on screen: left and right the real sky from
+                        the game's background layers (it moves with the game's own sky), above
+                        and below the screen's edge rows fading to their average colour;
                         0 = only behind the original screen (black around it)
   VRVignette            0-3 comfort vignette (see the options menu)
   VRCinema, VRCinemaSize, VRCinemaDepth, VRCinemaGlow, VRCinemaBezel
